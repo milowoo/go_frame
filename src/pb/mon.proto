@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package pb;
+
+/*说明:
+    s2c = server to client
+    c2s = client to server
+    c2c = client to client  后端直接原结构体转发,有可能在中间做一些逻辑
+
+    其他不带s2c,c2s,c2c前缀的,均为消息结构体,不能单独作为消息发送
+
+    协议组装:
+    协议名字长度(uint8) + 协议名(string) + protobuf包体(proto二进制)
+    注意:协议名字需要代码包路径,例如心跳协议c2sHeart,名字为pb.c2sHeart
+    */
+/*****************基础登录********************/
+/* 登录和初始化流程
+    1、connect          带上登录参数 timestamp, nonstr, post_data, sign, reconnectFlag
+    2、pb.c2sLoading    上报资源加载进度，到100后服务端下发游戏初始化数据
+*/
+
+// reconnectFlag 连接标识取值
+enum RECONNECT_FLAG {
+    FIRST = 0; // 第一次连接
+    UNINITED = 1; // 已连接但未初始化
+    INITED = 2; // 已连接且已初始化
+}
+
+// 因为socket url直接附带上了基础参数,因此不需要客户端主动的login
+message s2cLogin {
+    string msg = 1;
+    bool result = 2;
+}
+
+// 两个玩家都连上后,广播playerInfo
+message s2cPlayerInfo {
+    repeated PlayerInfo players = 1;
+}
+message PlayerInfo {
+    string uid = 1;
+    string name = 2;
+    string avatarurl = 3;
+    string teamid = 4;
+    string opt = 5;
+    int32 sex = 6;
+    bool ai = 7;
+}
+
+// 客户端准备好后,往服务器发送loading 100,双方都100%后,即开始推送下面的初始化消息
+message c2sLoading {
+    int32 progress = 1;
+}
+// 转发对方的加载进度
+message s2cOpponentLoading {
+    int32 progress = 1;
+}
+
+// 心跳,客户端无其他业务请求时，每2秒发送
+message c2sHeart {
+    int64 timestamp = 1; // 客户端时间戳
+}
+message s2cHeart {
+    int64 timestamp = 1; // 服务器时间戳
+}
+
+message NoData {
+
+}
+
+/**************************************** 游戏进程 *****************************************/
+// 下发配置信息
+message s2cParams {
+    int32 maxGameTimeSecs = 1; //一局比赛最长时间(秒)
+    int32 maxStrikeTimeSecs = 2; //一次击球(strike)最长的时间(秒),超过时间没有完成击球就切换回合
+    int32 minWinPoints = 3; //赢得比赛得最低分数
+}
+
+
+// 游戏结束
+message s2cGameEnd {
+    string result = 1; // 用来上报的字符串
+    repeated string users = 2; // 玩家列表
+    string winner = 3; // 赢家
+    repeated string scores = 4; // 玩家得分列表
+    string msg = 5; // 游戏结果信息 NO_START, ROOM_SUCCESS_END, ROOM_ESCAPED, ROOM_TOUCHLINE
+}
+
+/************************************* 断线重连 ************************************/
+// 通知玩家, 其他人断线
+message s2cDisconnect {
+
+}
+
+// 通知玩家(其他人)上线消息
+message OnlineInfo{
+	string              uid         = 1;
+	bool                online      = 2;
+}
+
+message s2cOnline {
+    repeated OnlineInfo uids        = 1;
+}
+
+// 踢下线通知.其他终端上线我的账号，我被踢下线
+message s2cKickOffline {
+}
+
+// 表情
+message c2cEmoji {
+    int32 index = 1;
+}
+
